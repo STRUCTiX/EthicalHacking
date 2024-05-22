@@ -12,8 +12,16 @@ async fn main() {
 
     let results = get_action_sites(&project_name, 1).await.unwrap();
     let urls = retrieve_run_urls(&project_name, results).await.unwrap();
-    for (url, run) in urls {
-        println!("url: {url}, {run}");
+    for (url, run) in &urls {
+        println!("url: {url}, run: {run}");
+    }
+    let run_sites = get_run_sites(urls).await.unwrap();
+    println!("run sites: {}", run_sites.len());
+    let job_ids = retrieve_job_commit_ids(run_sites).await.unwrap();
+    println!("job_ids: {}", job_ids.len());
+
+    for (run, job, commit) in job_ids {
+        println!("Run: {run}, Job: {job}, Commit: {commit}");
     }
 }
 
@@ -52,7 +60,7 @@ async fn retrieve_run_urls(
     // Generate regex string
     let mut regex = String::with_capacity(40);
     regex.push_str(r#"a href=\"(\/"#);
-    regex.push_str(&project_name.replace("/", r"\/"));
+    regex.push_str(&project_name.replace('/', r"\/"));
     regex.push_str(r#"\/actions\/runs\/(\d+))\""#);
     let re = Regex::new(&regex)?;
 
@@ -67,8 +75,6 @@ async fn retrieve_run_urls(
 }
 
 async fn get_run_sites(action_urls: Vec<(String, String)>) -> Result<Vec<String>, reqwest::Error> {
-    //let re = Regex::new(r#"\/actions\/runs\/(\d+)\/job\/(\d+)""#)?;
-
     let mut futures = Vec::with_capacity(25);
     for (url, _) in action_urls {
         futures.push(reqwest::get(format!("https://github.com{url}")));
@@ -82,4 +88,37 @@ async fn get_run_sites(action_urls: Vec<(String, String)>) -> Result<Vec<String>
     }
 
     Ok(results)
+}
+
+async fn retrieve_job_commit_ids(
+    run_sites: Vec<String>,
+) -> Result<Vec<(String, String, String)>, regex::Error> {
+    // Get the job id
+
+    let re = Regex::new(r#"\/actions\/runs\/(?<runid>\d+)\/job\/(?<jobid>\d+)""#)?;
+    let re_commit = Regex::new(r#"\/commit\/(?<commit>[a-f0-9]+)"#)?;
+
+    let mut job_ids: Vec<(String, String, String)> = Vec::with_capacity(25);
+    for r in run_sites {
+        match re.captures(&r) {
+            Some(capgroups) => {
+                let run_id = &capgroups["runid"];
+                let job_id = &capgroups["jobid"];
+
+                // Only check the commit capture if the first was successful
+                if let Some(capcommit) = re_commit.captures(&r) {
+                    let commit = &capcommit["commit"];
+
+                    job_ids.push((run_id.into(), job_id.into(), commit.into()));
+                } else {
+                    // These runs were triggered by a pull request from a foreign repository.
+                    // Therefore, there is no commit id
+                    eprintln!("{run_id}, {job_id}, Commit not found.");
+                }
+            }
+            None => eprintln!("Run-ID and Job-ID not found"),
+        }
+    }
+
+    Ok(job_ids)
 }

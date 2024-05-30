@@ -4,7 +4,10 @@ use futures::future::join_all;
 use json_format::CookieEditor;
 use regex::Regex;
 use std::{env, sync::Arc};
-use tokio::fs;
+use tokio::{
+    fs::{self, File},
+    io::AsyncWriteExt,
+};
 
 #[tokio::main]
 async fn main() {
@@ -15,12 +18,14 @@ async fn main() {
 
     // Convert json
     if project_name == "-c" {
-        let file = std::fs::File::open("session_old.json")
+        let file = std::fs::File::open("github_session.json")
             .map(std::io::BufReader::new)
             .unwrap();
 
         let cookie = CookieEditor::from(file);
         println!("{}", cookie.convert());
+        let mut file = File::create("session.json").await.unwrap();
+        file.write_all(cookie.convert().as_bytes()).await.unwrap();
         return;
     }
 

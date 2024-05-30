@@ -1,0 +1,15 @@
+{
+    "name": "user_session",
+    "value": "your_token",
+    "domain": "github.com",
+    "hostOnly": true,
+    "path": "/",
+    "secure": true,
+    "httpOnly": true,
+    "sameSite": "lax",
+    "session": false,
+    "firstPartyDomain": "",
+    "partitionKey": null,
+    "expirationDate": 1718000042,
+    "storeId": null
+}

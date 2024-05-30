@@ -1,7 +1,9 @@
-use std::{env, io::Read, sync::Arc};
+mod json_format;
 
 use futures::future::join_all;
+use json_format::CookieEditor;
 use regex::Regex;
+use std::{env, sync::Arc};
 use tokio::fs;
 
 #[tokio::main]
@@ -11,11 +13,27 @@ async fn main() {
         .nth(1)
         .expect("First argument must be a project name.");
 
-    let results = get_action_sites(&project_name, 1).await.unwrap();
+    // Convert json
+    if project_name == "-c" {
+        let file = std::fs::File::open("session_old.json")
+            .map(std::io::BufReader::new)
+            .unwrap();
+
+        let cookie = CookieEditor::from(file);
+        println!("{}", cookie.convert());
+        return;
+    }
+
+    // Retrieve action sites and parse the action urls
+    // CHANGE: amount sites to desired value
+    let amount_sites = 1;
+    let results = get_action_sites(&project_name, amount_sites).await.unwrap();
     let urls = retrieve_run_urls(&project_name, results).await.unwrap();
     for (url, run) in &urls {
         println!("url: {url}, run: {run}");
     }
+
+    // Call actions and retrieve the run sites with run-id and job-id
     let run_sites = get_run_sites(urls).await.unwrap();
     println!("run sites: {}", run_sites.len());
     let job_ids = retrieve_job_commit_ids(run_sites).await.unwrap();
@@ -25,8 +43,7 @@ async fn main() {
         println!("Run: {run}, Job: {job}, Commit: {commit}");
     }
 
-    let job_ids = vec![("s".into(), "a".into(), "asdf".into())];
-
+    // Download the workflow logs
     download_log(&project_name, job_ids).await.unwrap();
 }
 
@@ -138,17 +155,20 @@ async fn download_log(
         let file = std::fs::File::open("session.json")
             .map(std::io::BufReader::new)
             .unwrap();
+
         // use re-exported version of `CookieStore` for crate compatibility
         reqwest_cookie_store::CookieStore::load_json(file).unwrap()
     };
     let cookie_store = reqwest_cookie_store::CookieStoreMutex::new(cookie_store);
     let cookie_store = Arc::new(cookie_store);
 
+    // Create a reqwest client with the Github user session cookie
     let client = reqwest::Client::builder()
         .cookie_provider(Arc::clone(&cookie_store))
         .build()
         .unwrap();
 
+    // Download files as authenticated user
     let mut files = Vec::with_capacity(25);
     for (run, job, commit) in run_job_commit {
         let log_url =

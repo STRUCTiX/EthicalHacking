@@ -59,10 +59,13 @@ async fn get_action_sites(
 ) -> Result<Vec<String>, reqwest::Error> {
     let main_url = format!("https://github.com/{project_name}/actions?page=");
 
+    // Create a single reusable client
+    let client = reqwest::Client::new();
+
     // Create all site requests
     let mut site_futures = Vec::with_capacity(pagination_limit as usize);
     for i in 1..=pagination_limit {
-        let resp = reqwest::get(format!("{main_url}{i}"));
+        let resp = client.get(format!("{main_url}{i}")).send();
         site_futures.push(resp);
     }
 
@@ -103,9 +106,11 @@ async fn retrieve_run_urls(
 
 /// Get the run site for each action
 async fn get_run_sites(action_urls: Vec<(String, String)>) -> Result<Vec<String>, reqwest::Error> {
+    let client = reqwest::Client::new();
+
     let mut futures = Vec::with_capacity(25);
     for (url, _) in action_urls {
-        futures.push(reqwest::get(format!("https://github.com{url}")));
+        futures.push(client.get(format!("https://github.com{url}")).send());
     }
 
     let responses = join_all(futures).await;

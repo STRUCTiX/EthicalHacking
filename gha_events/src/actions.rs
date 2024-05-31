@@ -1,9 +1,10 @@
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use futures::future::join_all;
 use regex::Regex;
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 use tokio::fs;
 
+#[derive(PartialEq)]
 pub enum Actions {
     ActionSites(Vec<String>),
     RunSites(Vec<(String, String)>),
@@ -60,6 +61,23 @@ impl Actions {
             Actions::RunJobCommit(v) => v.len(),
             Actions::Done => 0,
         }
+    }
+
+    pub async fn get_runs_set(&self) -> anyhow::Result<HashSet<(String, String)>> {
+        if let Actions::RunSites(sites) = &self {
+            let set =
+                HashSet::from_iter(sites.iter().map(|(url, runid)| (url.into(), runid.into())));
+            Ok(set)
+        } else {
+            bail!("No actions in set")
+        }
+    }
+
+    pub async fn from_runs_set<R>(runs: R) -> Self
+    where
+        R: IntoIterator<Item = (String, String)>,
+    {
+        Actions::RunSites(runs.into_iter().collect())
     }
 }
 

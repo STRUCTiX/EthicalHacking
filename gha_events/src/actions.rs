@@ -219,7 +219,7 @@ async fn download_log(
 
     // Create directory
     if let Err(e) = fs::create_dir("./out").await {
-        eprintln!("{e}");
+        eprintln!("Creating directory: {e}");
     }
 
     // Write all files
@@ -228,7 +228,7 @@ async fn download_log(
     // Print all file errors
     results.iter().for_each(|x| {
         if let Err(e) = x {
-            eprintln!("{e}")
+            eprintln!("Creating file: {e}")
         }
     });
 

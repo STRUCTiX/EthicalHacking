@@ -71,6 +71,7 @@ async fn main() {
         let mut interval = interval(Duration::from_secs(20));
         loop {
             interval.tick().await;
+            println!("Tick");
 
             let current_ids = actions::Actions::new(&project_name, 1).await;
             let current_ids = match current_ids {
@@ -124,8 +125,11 @@ async fn main() {
                     if d == actions::Actions::Done {
                         // replace the reference_ids with the runs_set
                         reference_ids = runs_set;
+                        println!("Download finished.");
                     }
                 }
+            } else {
+                println!("No new job found");
             }
         }
     }

@@ -1,8 +1,47 @@
 use anyhow::bail;
 use futures::future::join_all;
-use regex::Regex;
 use std::{collections::HashSet, sync::Arc};
 use tokio::fs;
+
+macro_rules! regex {
+    ($re:expr $(,)?) => {{
+        static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| regex::Regex::new($re).unwrap())
+    }};
+}
+
+macro_rules! reqclient {
+    () => {{
+        static RE: once_cell::sync::OnceCell<reqwest::Client> = once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| reqwest::Client::new())
+    }};
+}
+
+macro_rules! reqauthclient {
+    ($s:literal) => {{
+        static RE: once_cell::sync::OnceCell<reqwest::Client> = once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| {
+            // Build a client with the Github session
+            let cookie_store = {
+                let file = std::fs::File::open($s)
+                    .map(std::io::BufReader::new)
+                    .unwrap();
+
+                // use re-exported version of `CookieStore` for crate compatibility
+                reqwest_cookie_store::CookieStore::load_json(file).unwrap()
+            };
+            let cookie_store = reqwest_cookie_store::CookieStoreMutex::new(cookie_store);
+            let cookie_store = Arc::new(cookie_store);
+
+            // Create a reqwest client with the Github user session cookie
+            let client = reqwest::Client::builder()
+                .cookie_provider(Arc::clone(&cookie_store))
+                .build()
+                .unwrap();
+            return client;
+        })
+    }};
+}
 
 #[derive(PartialEq)]
 pub enum Actions {
@@ -89,7 +128,7 @@ async fn get_action_sites(
     let main_url = format!("https://github.com/{project_name}/actions?page=");
 
     // Create a single reusable client
-    let client = reqwest::Client::new();
+    let client = reqclient!();
 
     // Create all site requests
     let mut site_futures = Vec::with_capacity(pagination_limit as usize);
@@ -121,7 +160,8 @@ async fn retrieve_run_urls(
     regex.push_str(r#"a href=\"(\/"#);
     regex.push_str(&project_name.replace('/', r"\/"));
     regex.push_str(r#"\/actions\/runs\/(\d+))\""#);
-    let re = Regex::new(&regex)?;
+    //let re = Regex::new(&regex)?;
+    let re = regex!(&regex);
 
     let mut urls: Vec<(String, String)> = Vec::with_capacity(25);
     for s in action_sites {
@@ -135,7 +175,7 @@ async fn retrieve_run_urls(
 
 /// Get the run site for each action
 async fn get_run_sites(action_urls: Vec<(String, String)>) -> Result<Vec<String>, reqwest::Error> {
-    let client = reqwest::Client::new();
+    let client = reqclient!();
 
     let mut futures = Vec::with_capacity(25);
     for (url, _) in action_urls {
@@ -158,8 +198,9 @@ async fn retrieve_job_commit_ids(
 ) -> Result<Vec<(String, String, String)>, regex::Error> {
     // Get the job id
 
-    let re = Regex::new(r#"\/actions\/runs\/(?<runid>\d+)\/job\/(?<jobid>\d+)""#)?;
-    let re_commit = Regex::new(r#"\/commit\/(?<commit>[a-f0-9]+)"#)?;
+    //let re = Regex::new(r#"\/actions\/runs\/(?<runid>\d+)\/job\/(?<jobid>\d+)""#)?;
+    let re = regex!(r#"\/actions\/runs\/(?<runid>\d+)\/job\/(?<jobid>\d+)""#);
+    let re_commit = regex!(r#"\/commit\/(?<commit>[a-f0-9]+)"#);
 
     let mut job_ids: Vec<(String, String, String)> = Vec::with_capacity(25);
     for r in run_sites {
@@ -189,23 +230,24 @@ async fn download_log(
     project_name: &str,
     run_job_commit: Vec<(String, String, String)>,
 ) -> Result<(), reqwest::Error> {
-    // Build a client with the Github session
-    let cookie_store = {
-        let file = std::fs::File::open("session.json")
-            .map(std::io::BufReader::new)
-            .unwrap();
+    //// Build a client with the Github session
+    //let cookie_store = {
+    //    let file = std::fs::File::open("session.json")
+    //        .map(std::io::BufReader::new)
+    //        .unwrap();
 
-        // use re-exported version of `CookieStore` for crate compatibility
-        reqwest_cookie_store::CookieStore::load_json(file).unwrap()
-    };
-    let cookie_store = reqwest_cookie_store::CookieStoreMutex::new(cookie_store);
-    let cookie_store = Arc::new(cookie_store);
+    //    // use re-exported version of `CookieStore` for crate compatibility
+    //    reqwest_cookie_store::CookieStore::load_json(file).unwrap()
+    //};
+    //let cookie_store = reqwest_cookie_store::CookieStoreMutex::new(cookie_store);
+    //let cookie_store = Arc::new(cookie_store);
 
-    // Create a reqwest client with the Github user session cookie
-    let client = reqwest::Client::builder()
-        .cookie_provider(Arc::clone(&cookie_store))
-        .build()
-        .unwrap();
+    //// Create a reqwest client with the Github user session cookie
+    //let client = reqwest::Client::builder()
+    //    .cookie_provider(Arc::clone(&cookie_store))
+    //    .build()
+    //    .unwrap();
+    let client = reqauthclient!("session.json");
 
     // Download files as authenticated user
     let mut files = Vec::with_capacity(25);

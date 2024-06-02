@@ -230,23 +230,7 @@ async fn download_log(
     project_name: &str,
     run_job_commit: Vec<(String, String, String)>,
 ) -> Result<(), reqwest::Error> {
-    //// Build a client with the Github session
-    //let cookie_store = {
-    //    let file = std::fs::File::open("session.json")
-    //        .map(std::io::BufReader::new)
-    //        .unwrap();
-
-    //    // use re-exported version of `CookieStore` for crate compatibility
-    //    reqwest_cookie_store::CookieStore::load_json(file).unwrap()
-    //};
-    //let cookie_store = reqwest_cookie_store::CookieStoreMutex::new(cookie_store);
-    //let cookie_store = Arc::new(cookie_store);
-
-    //// Create a reqwest client with the Github user session cookie
-    //let client = reqwest::Client::builder()
-    //    .cookie_provider(Arc::clone(&cookie_store))
-    //    .build()
-    //    .unwrap();
+    // Create a reqwest client with the Github user session cookie
     let client = reqauthclient!("session.json");
 
     // Download files as authenticated user

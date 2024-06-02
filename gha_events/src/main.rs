@@ -1,4 +1,5 @@
 mod actions;
+mod extractor;
 mod json_format;
 
 use json_format::CookieEditor;

@@ -97,7 +97,7 @@ bool RepoListFetcher::readPreviouslyFetchedRanges(QList<std::pair<int, int>> &pr
     while (!in.atEnd()) {
         QString line = in.readLine();
         QStringList parts = line.split(",");
-        if (parts.size() != 3) {
+        if (parts.size() != 11) {
             QTextStream(stderr) << "Invalid line in file: " << line;
             goto fail;
         }
@@ -235,7 +235,17 @@ void RepoListFetcher::onRequestFinished(QNetworkReply *reply) {
             return;
         }
 
+        QString nodeId = repo["node_id"].toString();
         QString fullName = repo["full_name"].toString();
+        QString description = repo["description"].toString();
+        bool fork = repo["fork"].toBool();
+
+        QJsonValue owner = repo["owner"];
+        QString ownerLogin = owner["login"].toString();
+        int ownerId = owner["id"].toInt();
+        QString ownerNodeId = owner["node_id"].toString();
+        QString ownerType = owner["type"].toString();
+        bool ownerSiteAdmin = owner["site_admin"].toBool();
 
         if (id > rangesToFetch[rangeIndex].second) {
             if (idSince < rangesToFetch[rangeIndex].second) {
@@ -258,7 +268,7 @@ void RepoListFetcher::onRequestFinished(QNetworkReply *reply) {
         //qDebug() << "ID:" << id;
         //qDebug() << "Full name:" << fullName;
 
-        out << id << "," << idSince + 1 << "," << fullName << "\n";
+        out << id << "," << idSince + 1 << "," << fullName << "," << description.toUtf8().toBase64() << "," << fork << "," << nodeId << "," << ownerLogin << "," << ownerId << "," << ownerNodeId << "," << ownerType << "," << ownerSiteAdmin << "\n";
 
         idSince = id;
     }

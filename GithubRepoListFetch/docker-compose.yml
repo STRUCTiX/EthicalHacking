@@ -1,0 +1,9 @@
+version: "3.9"
+
+services:
+  repofetch:
+    build: .
+    environment:
+      - PORT=8080
+    volumes:
+      - ./.volumes/repofetch:/src

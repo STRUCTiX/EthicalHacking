@@ -4,6 +4,6 @@ services:
   repofetch:
     build: .
     environment:
-      - PORT=8080
+      - GITHUB_REPO_FETCHER_ARGS=-p -t <token> -o ./data/githubRepoList.db
     volumes:
-      - ./.volumes/repofetch:/src
+      - ./.volumes/repofetch:/src/data

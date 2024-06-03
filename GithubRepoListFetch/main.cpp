@@ -18,10 +18,18 @@ int main(int argc, char *argv[]) {
     parser.addOptions({
         {{"r", "range"}, "Inclusive range of IDs to fetch. Leave either side empty to specify min/max.", "from..to", ".."},
         {{"t", "token"}, "Github API access token", "token string", QString()},
-        {{"p", "progress"}, "Print one rate limit information line per request."}
+        {{"p", "progress"}, "Print one rate limit information line per request."},
+        {{"o", "output"}, "Output database file.", "file", "githubRepoList.db"}
     });
 
-    parser.process(app);
+    QStringList args = app.arguments();
+    QString envExtraArgsStr = qEnvironmentVariable("GITHUB_REPO_FETCHER_ARGS");
+    if (!envExtraArgsStr.isNull()) {
+        QTextStream(stdout) << "Extra arguments from env: " << envExtraArgsStr << '\n';
+    }
+    QStringList envExtraArgs = envExtraArgsStr.split(' ', Qt::SkipEmptyParts);
+    args.append(envExtraArgs);
+    parser.process(args);
 
     QStringList rangeParts = parser.value("range").split("..");
     if (rangeParts.size() != 2) {
@@ -52,7 +60,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    RepoListFetcher *task = new RepoListFetcher(idStart, idEnd, "githubRepoList.db", parser.value("token"), parser.isSet("progress"), &app);
+    RepoListFetcher *task = new RepoListFetcher(idStart, idEnd, parser.value("output"), parser.value("token"), parser.isSet("progress"), &app);
 
     QObject::connect(task, &RepoListFetcher::finished, &app, &QCoreApplication::quit);
 

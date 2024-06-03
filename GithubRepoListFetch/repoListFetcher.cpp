@@ -249,7 +249,7 @@ void RepoListFetcher::onRequestFinished(QNetworkReply *reply) {
 
         if (id > rangesToFetch[rangeIndex].second) {
             if (idSince < rangesToFetch[rangeIndex].second) {
-                out << rangesToFetch[rangeIndex].second << "," << idSince + 1 << ",endOfRangeDummy\n";
+                out << rangesToFetch[rangeIndex].second << "," << idSince + 1 << ",endOfRangeDummy,,,,,,,,\n";
             }
 
             if (rangeIndex == rangesToFetch.size() - 1) {

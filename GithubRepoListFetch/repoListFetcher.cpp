@@ -76,7 +76,7 @@ void RepoListFetcher::run() {
     }
 
     if (!databaseFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
-        qDebug() << "Could not open file for writing";
+        QTextStream(stderr) << "Could not open file for writing\n";
         emit finished();
         return;
     }

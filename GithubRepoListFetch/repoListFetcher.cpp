@@ -9,8 +9,8 @@
 #include <limits>
 #include "repoListFetcher.h"
 
-RepoListFetcher::RepoListFetcher(int idStart, int idEnd, QString databaseFile, QString apiToken, bool showProgress, QObject *parent)
-    : QObject(parent), networkAccessManager(new QNetworkAccessManager(this)), databaseFile(databaseFile), rangesToFetch({{idStart, idEnd}}), apiToken(apiToken), showProgress(showProgress) {
+RepoListFetcher::RepoListFetcher(int idStart, int idEnd, QString databaseFile, QStringList apiTokens, UnauthenticatedMode unauthenticatedMode, DispatchMethod dispatchMethod, bool showProgress, QObject *parent)
+    : QObject(parent), networkAccessManager(new QNetworkAccessManager(this)), apiTokenDispatcher(apiTokens, unauthenticatedMode, dispatchMethod), databaseFile(databaseFile), rangesToFetch({{idStart, idEnd}}), showProgress(showProgress) {
     connect(networkAccessManager, &QNetworkAccessManager::finished, this, &RepoListFetcher::onRequestFinished);
 }
 
@@ -140,10 +140,20 @@ fail:
 
 
 void RepoListFetcher::fetchBatch() {
-    QNetworkRequest request;
+    apiTokenDispatcher.processResets();
+    QString apiToken = apiTokenDispatcher.getApiToken();
+    if (apiToken.isNull()) {
+        QTextStream(stderr) << "No API token available\n";
+        QTimer::singleShot(apiTokenDispatcher.secUntilTokenAvailable() * 1000, this, &RepoListFetcher::fetchBatch);
+        return;
+    }
+    lastApiToken = apiToken;
 
+    //qDebug() << "API token: " << apiToken;
+
+    QNetworkRequest request;
     request.setHeader(QNetworkRequest::UserAgentHeader, "RepoListFetcher");
-    if (!apiToken.isNull()) {
+    if (!apiToken.isEmpty()) {
         request.setRawHeader("Authorization", ("Bearer " + apiToken).toUtf8());
     }
     request.setRawHeader("X-GitHub-Api-Version", "2022-11-28");
@@ -159,34 +169,27 @@ void RepoListFetcher::onRequestFinished(QNetworkReply *reply) {
 
     QTextStream out(&databaseFile);
 
-    if (!reply->hasRawHeader("x-ratelimit-remaining") || !reply->hasRawHeader("x-ratelimit-reset")) {
-        QTextStream(stderr) << "Rate limit header(s) missing\n";
-        emit finished();
-        return;
-    }
-
-    bool ok1, ok2;
-    int rateLimitRemaining = reply->rawHeader("x-ratelimit-remaining").toInt(&ok1);
-    long long rateLimitReset = reply->rawHeader("x-ratelimit-reset").toLongLong(&ok2);
-    if (!ok1 || !ok2) {
-        QTextStream(stderr) << "Invalid rate limit header(s)\n";
+    if (!apiTokenDispatcher.processRateLimitInfo(*reply, lastApiToken)) {
         emit finished();
         return;
     }
 
     if (showProgress) {
-        QTextStream(stdout) << "Rate limit remaining: " << rateLimitRemaining << '\n';
+        QTextStream(stdout) << ".\n";
     }
 
-    if (rateLimitRemaining == 0) {
-        long long msecToRetry = QDateTime::currentDateTime().msecsTo(QDateTime::fromSecsSinceEpoch(rateLimitReset)) + 10'000;
-        QTextStream(stdout) << "Rate limit reached, waiting " << msecToRetry / 60'000 << "m " << (msecToRetry / 1000) % 60 << "s\n";
-        QTimer::singleShot(msecToRetry, this, &RepoListFetcher::fetchBatch);
+    if (reply->error() == QNetworkReply::ContentAccessDenied) {
+        if (lastApiToken.isEmpty()) {
+            QTextStream(stdout) << "Rate limit exceeded for unauthenticated requests\n";
+        } else {
+            QTextStream(stdout) << "Rate limit exceeded for token " << lastApiToken << "\n";
+        }
+        QTimer::singleShot(0, this, &RepoListFetcher::fetchBatch);
         return;
     }
 
     if (reply->error() != QNetworkReply::NoError) {
-        QTextStream(stderr) << "Request failed:\n" << reply->errorString();
+        QTextStream(stderr) << "Request failed:\n" << reply->error() << "\n" << reply->errorString();
         reply->deleteLater();
         emit finished();
         return;
@@ -261,8 +264,7 @@ void RepoListFetcher::onRequestFinished(QNetworkReply *reply) {
             rangeIndex++;
             idSince = rangesToFetch[rangeIndex].first - 1;
 
-            fetchBatch();
-            return;
+            goto next;
         }
 
         //qDebug() << "ID:" << id;
@@ -284,5 +286,10 @@ void RepoListFetcher::onRequestFinished(QNetworkReply *reply) {
         return;
     }
 
-    fetchBatch();
+next:
+    long long waitSeconds = apiTokenDispatcher.secUntilTokenAvailable();
+    if (waitSeconds > 0) {
+        QTextStream(stdout) << "Rate limit reached, waiting " << waitSeconds / 60 << "m " << waitSeconds % 60 << "s\n";
+    }
+    QTimer::singleShot(waitSeconds * 1000, this, &RepoListFetcher::fetchBatch);
 }

@@ -7,12 +7,13 @@
 #include <QNetworkReply>
 #include <QFile>
 #include <utility>
+#include "apiTokenDispatcher.h"
 
 class RepoListFetcher: public QObject {
     Q_OBJECT
 
     public:
-        RepoListFetcher(int idStart, int idEnd, QString databaseFile, QString apiToken, bool showProgress, QObject *parent = nullptr);
+        RepoListFetcher(int idStart, int idEnd, QString databaseFile, QStringList apiTokens, UnauthenticatedMode unauthenticatedMode, DispatchMethod dispatchMethod, bool showProgress, QObject *parent = nullptr);
 
     public slots:
         void run();
@@ -29,14 +30,15 @@ class RepoListFetcher: public QObject {
 
     private:
         QNetworkAccessManager *networkAccessManager;
+        ApiTokenDispatcher apiTokenDispatcher;
         QFile databaseFile;
 
         QList<std::pair<int, int>> rangesToFetch;
-        QString apiToken;
         bool showProgress;
 
         int idSince;
         int rangeIndex;
+        QString lastApiToken;
 };
 
 #endif

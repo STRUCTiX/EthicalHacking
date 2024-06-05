@@ -4,7 +4,9 @@ CONFIG += c++20 cmdline
 
 SOURCES += \
     main.cpp \
-    repoListFetcher.cpp
+    repoListFetcher.cpp \
+    apiTokenDispatcher.cpp
 
 HEADERS += \
-    repoListFetcher.h
+    repoListFetcher.h \
+    apiTokenDispatcher.h

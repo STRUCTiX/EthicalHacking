@@ -17,9 +17,11 @@ int main(int argc, char *argv[]) {
 
     parser.addOptions({
         {{"r", "range"}, "Inclusive range of IDs to fetch. Leave either side empty to specify min/max.", "from..to", ".."},
-        {{"t", "token"}, "Github API access token", "token string", QString()},
-        {{"p", "progress"}, "Print one rate limit information line per request."},
-        {{"o", "output"}, "Output database file.", "file", "githubRepoList.db"}
+        {{"p", "progress"}, "Print one dot per request."},
+        {{"o", "output"}, "Output database file.", "file", "githubRepoList.db"},
+        {{"t", "token"}, "Github API access token", "token string"},
+        {{"u", "unauthenticated-mode"}, "How/if to use unauthenticated requests.", "off|first|normal|last", "first"},
+        {{"d", "dispatch-method"}, "Method for selecting the next API token.", "balance|first-available|random", "balance"},
     });
 
     QStringList args = app.arguments();
@@ -60,7 +62,35 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    RepoListFetcher *task = new RepoListFetcher(idStart, idEnd, parser.value("output"), parser.value("token"), parser.isSet("progress"), &app);
+    UnauthenticatedMode unauthenticatedMode;
+    if (parser.value("unauthenticated-mode") == "off") {
+        unauthenticatedMode = UnauthenticatedMode::Off;
+    } else if (parser.value("unauthenticated-mode") == "first") {
+        unauthenticatedMode = UnauthenticatedMode::First;
+    } else if (parser.value("unauthenticated-mode") == "normal") {
+        unauthenticatedMode = UnauthenticatedMode::Normal;
+    } else if (parser.value("unauthenticated-mode") == "last") {
+        unauthenticatedMode = UnauthenticatedMode::Last;
+    } else {
+        QTextStream(stderr) << app.applicationName() << ": Invalid unauthenticated mode.\n";
+        return 1;
+    }
+
+    DispatchMethod dispatchMethod;
+    if (parser.value("dispatch-method") == "balance") {
+        dispatchMethod = DispatchMethod::Balance;
+    } else if (parser.value("dispatch-method") == "first-available") {
+        dispatchMethod = DispatchMethod::FirstAvailable;
+    } else if (parser.value("dispatch-method") == "random") {
+        dispatchMethod = DispatchMethod::Random;
+    } else {
+        QTextStream(stderr) << app.applicationName() << ": Invalid dispatch method.\n";
+        return 1;
+    }
+
+    //qDebug() << parser.values("token");
+
+    RepoListFetcher *task = new RepoListFetcher(idStart, idEnd, parser.value("output"), parser.values("token"), unauthenticatedMode, dispatchMethod, parser.isSet("progress"), &app);
 
     QObject::connect(task, &RepoListFetcher::finished, &app, &QCoreApplication::quit);
 

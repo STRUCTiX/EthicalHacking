@@ -9,8 +9,8 @@
 #include <limits>
 #include "repoListFetcher.h"
 
-RepoListFetcher::RepoListFetcher(int idStart, int idEnd, QString databaseFile, QStringList apiTokens, UnauthenticatedMode unauthenticatedMode, DispatchMethod dispatchMethod, bool showProgress, QObject *parent)
-    : QObject(parent), networkAccessManager(new QNetworkAccessManager(this)), apiTokenDispatcher(apiTokens, unauthenticatedMode, dispatchMethod), databaseFile(databaseFile), rangesToFetch({{idStart, idEnd}}), showProgress(showProgress) {
+RepoListFetcher::RepoListFetcher(int idStart, int idEnd, QString databaseFile, QString anomalyLogFile, QStringList apiTokens, UnauthenticatedMode unauthenticatedMode, DispatchMethod dispatchMethod, bool showProgress, int errorStreakLimit, QObject *parent)
+    : QObject(parent), networkAccessManager(new QNetworkAccessManager(this)), apiTokenDispatcher(apiTokens, unauthenticatedMode, dispatchMethod), databaseFile(databaseFile), anomalyLogFile(anomalyLogFile), rangesToFetch({{idStart, idEnd}}), showProgress(showProgress), errorStreakLimit(errorStreakLimit), errorStreak(0) {
     connect(networkAccessManager, &QNetworkAccessManager::finished, this, &RepoListFetcher::onRequestFinished);
 }
 
@@ -76,7 +76,13 @@ void RepoListFetcher::run() {
     }
 
     if (!databaseFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
-        QTextStream(stderr) << "Could not open file for writing\n";
+        QTextStream(stderr) << "Could not open database file for writing\n";
+        emit finished();
+        return;
+    }
+
+    if (!anomalyLogFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        QTextStream(stderr) << "Could not open anomaly log file for writing\n";
         emit finished();
         return;
     }
@@ -140,11 +146,17 @@ fail:
 
 
 void RepoListFetcher::fetchBatch() {
+    if (showProgress) {
+        QTextStream(stdout) << "a";
+    }
+
     apiTokenDispatcher.processResets();
     QString apiToken = apiTokenDispatcher.getApiToken();
     if (apiToken.isNull()) {
-        QTextStream(stderr) << "No API token available\n";
-        QTimer::singleShot(apiTokenDispatcher.secUntilTokenAvailable() * 1000, this, &RepoListFetcher::fetchBatch);
+        long long waitSeconds = apiTokenDispatcher.secUntilTokenAvailable();
+        QTextStream(stdout) << "No API token available\n"
+                               "Rate limit reached, waiting " << waitSeconds / 60 << "m " << waitSeconds % 60 << "s\n";
+        QTimer::singleShot(waitSeconds * 1000, this, &RepoListFetcher::fetchBatch);
         return;
     }
     lastApiToken = apiToken;
@@ -169,13 +181,29 @@ void RepoListFetcher::onRequestFinished(QNetworkReply *reply) {
 
     QTextStream out(&databaseFile);
 
-    if (!apiTokenDispatcher.processRateLimitInfo(*reply, lastApiToken)) {
-        emit finished();
+    if (showProgress) {
+        QTextStream(stdout) << "b\n";
+    }
+
+    if (reply->error() != QNetworkReply::NoError && reply->error() != QNetworkReply::ContentAccessDenied) {
+        QTextStream(stderr) << "Request failed:\n" << reply->error() << "\n" << reply->errorString();
+
+        errorStreak++;
+        if (errorStreak > errorStreakLimit) {
+            QTextStream(stderr) << "Error streak limit reached\n";
+            emit finished();
+            return;
+        }
+
+        QTimer::singleShot(5000, this, &RepoListFetcher::fetchBatch);
         return;
     }
 
-    if (showProgress) {
-        QTextStream(stdout) << ".\n";
+    errorStreak = 0;
+
+    if (!apiTokenDispatcher.processRateLimitInfo(*reply, lastApiToken)) {
+        emit finished();
+        return;
     }
 
     if (reply->error() == QNetworkReply::ContentAccessDenied) {
@@ -185,13 +213,6 @@ void RepoListFetcher::onRequestFinished(QNetworkReply *reply) {
             QTextStream(stdout) << "Rate limit exceeded for token " << lastApiToken << "\n";
         }
         QTimer::singleShot(0, this, &RepoListFetcher::fetchBatch);
-        return;
-    }
-
-    if (reply->error() != QNetworkReply::NoError) {
-        QTextStream(stderr) << "Request failed:\n" << reply->error() << "\n" << reply->errorString();
-        reply->deleteLater();
-        emit finished();
         return;
     }
 
@@ -211,12 +232,22 @@ void RepoListFetcher::onRequestFinished(QNetworkReply *reply) {
     }
 
     const QJsonArray repoArray = json.array();
+    if (50 <= repoArray.count() && repoArray.count() < 100) {
+        QTextStream(stdout) << "Undersized response array, idSince: " << idSince << "\n";
+        QTextStream(&anomalyLogFile) << "Undersized response array, idSince: " << idSince << "\n";
+    }
 
     for (const QJsonValue &repo: repoArray) {
         if (!repo.isObject()) {
-            QTextStream(stderr) << "Repo is not an object\n";
-            emit finished();
-            return;
+            if (!repo.isNull()) {
+                QTextStream(stderr) << "Repo is not an object\n";
+                emit finished();
+                return;
+            }
+
+            QTextStream(stdout) << "Null repository, idSince: " << idSince << "\n";
+            QTextStream(&anomalyLogFile) << "Null repository, idSince: " << idSince << "\n";
+            continue;
         }
 
         if (repo["id"].toInt() <= 0) {
@@ -275,13 +306,12 @@ void RepoListFetcher::onRequestFinished(QNetworkReply *reply) {
         idSince = id;
     }
 
-    if (repoArray.count() < 100) {
+    if (repoArray.count() < 50) {
         QTextStream(stdout) << "End of list reached\n";
-        if (rangeIndex < rangesToFetch.size() - 1) {
-            QTextStream(stderr) << "End of list reached before end of ranges\n";
-            emit finished();
-            return;
+        if (rangesToFetch[rangeIndex].second != std::numeric_limits<int>::max()) {
+            QTextStream(stderr) << "End of list reached before end of range\n";
         }
+
         emit finished();
         return;
     }

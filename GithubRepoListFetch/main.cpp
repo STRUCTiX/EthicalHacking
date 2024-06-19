@@ -19,9 +19,11 @@ int main(int argc, char *argv[]) {
         {{"r", "range"}, "Inclusive range of IDs to fetch. Leave either side empty to specify min/max.", "from..to", ".."},
         {{"p", "progress"}, "Print one dot per request."},
         {{"o", "output"}, "Output database file.", "file", "githubRepoList.db"},
-        {{"t", "token"}, "Github API access token", "token string"},
+        {{"a", "anomaly-log"}, "Output text file to log all encountered anomalies.", "file", "anomalies.txt"},
+        {{"t", "token"}, "Github API access token(s). To specify multiple tokens, use multiple -t options.", "token string"},
         {{"u", "unauthenticated-mode"}, "How/if to use unauthenticated requests.", "off|first|normal|last", "first"},
         {{"d", "dispatch-method"}, "Method for selecting the next API token.", "balance|first-available|random", "balance"},
+        {{"e", "max-error-streak"}, "Quit if the number of consecutive network errors exceeds this limit.", "limit", "5"},
     });
 
     QStringList args = app.arguments();
@@ -39,11 +41,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    bool ok;
     int idStart, idEnd;
     if (rangeParts[0].isEmpty()) {
         idStart = 1;
     } else {
-        bool ok;
         idStart = rangeParts[0].toInt(&ok);
         if (!ok || idStart < 1) {
             QTextStream(stderr) << app.applicationName() << ": Invalid start ID.\n";
@@ -54,12 +56,17 @@ int main(int argc, char *argv[]) {
     if (rangeParts[1].isEmpty()) {
         idEnd = std::numeric_limits<int>::max();
     } else {
-        bool ok;
         idEnd = rangeParts[1].toInt(&ok);
         if (!ok || idEnd < idStart) {
             QTextStream(stderr) << app.applicationName() << ": Invalid end ID.\n";
             return 1;
         }
+    }
+
+    int errorStreakLimit = parser.value("max-error-streak").toInt(&ok);
+    if (!ok || errorStreakLimit < 0) {
+        QTextStream(stderr) << app.applicationName() << ": Invalid error streak limit.\n";
+        return 1;
     }
 
     UnauthenticatedMode unauthenticatedMode;
@@ -90,7 +97,7 @@ int main(int argc, char *argv[]) {
 
     //qDebug() << parser.values("token");
 
-    RepoListFetcher *task = new RepoListFetcher(idStart, idEnd, parser.value("output"), parser.values("token"), unauthenticatedMode, dispatchMethod, parser.isSet("progress"), &app);
+    RepoListFetcher *task = new RepoListFetcher(idStart, idEnd, parser.value("output"), parser.value("anomaly-log"), parser.values("token"), unauthenticatedMode, dispatchMethod, parser.isSet("progress"), errorStreakLimit, &app);
 
     QObject::connect(task, &RepoListFetcher::finished, &app, &QCoreApplication::quit);
 

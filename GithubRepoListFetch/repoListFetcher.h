@@ -13,7 +13,7 @@ class RepoListFetcher: public QObject {
     Q_OBJECT
 
     public:
-        RepoListFetcher(int idStart, int idEnd, QString databaseFile, QStringList apiTokens, UnauthenticatedMode unauthenticatedMode, DispatchMethod dispatchMethod, bool showProgress, QObject *parent = nullptr);
+        RepoListFetcher(int idStart, int idEnd, QString databaseFile, QString anomalyLogFile, QStringList apiTokens, UnauthenticatedMode unauthenticatedMode, DispatchMethod dispatchMethod, bool showProgress, int errorStreakLimit, QObject *parent = nullptr);
 
     public slots:
         void run();
@@ -32,6 +32,7 @@ class RepoListFetcher: public QObject {
         QNetworkAccessManager *networkAccessManager;
         ApiTokenDispatcher apiTokenDispatcher;
         QFile databaseFile;
+        QFile anomalyLogFile;
 
         QList<std::pair<int, int>> rangesToFetch;
         bool showProgress;
@@ -39,6 +40,9 @@ class RepoListFetcher: public QObject {
         int idSince;
         int rangeIndex;
         QString lastApiToken;
+
+        int errorStreakLimit;
+        int errorStreak;
 };
 
 #endif

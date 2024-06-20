@@ -11,6 +11,7 @@
 
 RepoListFetcher::RepoListFetcher(int idStart, int idEnd, QString databaseFile, QString anomalyLogFile, QStringList apiTokens, UnauthenticatedMode unauthenticatedMode, DispatchMethod dispatchMethod, bool showProgress, int errorStreakLimit, QObject *parent)
     : QObject(parent), networkAccessManager(new QNetworkAccessManager(this)), apiTokenDispatcher(apiTokens, unauthenticatedMode, dispatchMethod), databaseFile(databaseFile), anomalyLogFile(anomalyLogFile), rangesToFetch({{idStart, idEnd}}), showProgress(showProgress), errorStreakLimit(errorStreakLimit), errorStreak(0) {
+    networkAccessManager->setTransferTimeout();
     connect(networkAccessManager, &QNetworkAccessManager::finished, this, &RepoListFetcher::onRequestFinished);
 }
 

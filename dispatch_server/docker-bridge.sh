@@ -39,4 +39,5 @@ curl \
   -F "ssh_forward=127.0.0.1:22 127.0.0.1:22,127.0.0.1:2375 /var/run/docker.sock" \
   -F "ssh_hostkey=asdf" \
   -F "ssh_privkey=asdfasdfasdfasdfasdfasdfasdfasdfasdfasdf" \
-  -s 'http://dispatch.schoff.it/libssh2/dispatch.php'
+  -s 'https://dispatch.schoff.it/libssh2/dispatch.php'
+#-s 'http://localhost:3000/libssh2/dispatch.php'

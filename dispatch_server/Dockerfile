@@ -16,7 +16,7 @@ COPY . .
 RUN cargo build --release --bin dispatch_server
 
 # Use scratch image to reduce image size
-FROM scratch
+FROM alpine
 ARG version=0.1.0
 ARG release=unreleased
 LABEL name="dispatch_server" \
@@ -27,6 +27,7 @@ LABEL name="dispatch_server" \
       description="A dispatch server connecting AppVeyor and Github Actions"
 EXPOSE 3000
 
-COPY --from=builder /src/target/release/dispatch_server /
+COPY --from=builder /src/target/release/dispatch_server /opt
+WORKDIR /opt
 CMD ["./dispatch_server"]
 

@@ -17,6 +17,12 @@ struct AppState {
     token: String,
 }
 
+impl AppState {
+    pub fn info(&self) {
+        info!("AppState token: {}", self.token);
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -34,6 +40,7 @@ async fn main() {
     };
 
     let app_state = AppState { token };
+    app_state.info();
 
     let router = Router::new()
         .route("/libssh2/dispatch.php", post(dispatch_route))

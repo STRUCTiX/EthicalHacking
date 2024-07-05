@@ -27,16 +27,16 @@
 # 	-s 'https://stuff.marc-hoersken.de/libssh2/dispatch.php'
 
 curl \
-	-F "account=libssh2org" \
-	-F "project=libssh2" \
-	-F "buildid=1337" \
-	-F "base=master" \
-	-F "hash=12345" \
-	-F "repo=libssh2" \
-	-F "ssh_host=127.0.0.1" \
-	-F "ssh_port=22" \
-	-F "ssh_user=ruediger" \
-	-F "ssh_forward=127.0.0.1:22 127.0.0.1:22,127.0.0.1:2375 /var/run/docker.sock" \
-	-F "ssh_hostkey=asdf" \
-	-F "ssh_privkey=asdfasdfasdfasdfasdfasdfasdfasdfasdfasdf" \
-	-s 'http://127.0.0.1:3000/libssh2/dispatch.php'
+  -F "account=STRUCTiX" \
+  -F "project=EthicalHacking" \
+  -F "buildid=1337" \
+  -F "base=main" \
+  -F "hash=12345" \
+  -F "repo=EthicalHacking" \
+  -F "ssh_host=127.0.0.1" \
+  -F "ssh_port=22" \
+  -F "ssh_user=ruediger" \
+  -F "ssh_forward=127.0.0.1:22 127.0.0.1:22,127.0.0.1:2375 /var/run/docker.sock" \
+  -F "ssh_hostkey=asdf" \
+  -F "ssh_privkey=asdfasdfasdfasdfasdfasdfasdfasdfasdfasdf" \
+  -s 'http://127.0.0.1:3000/libssh2/dispatch.php'

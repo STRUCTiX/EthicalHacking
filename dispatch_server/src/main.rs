@@ -62,6 +62,7 @@ async fn dispatch_route(
     }
 
     info!("{:?}", form_data);
+    show_ssh_key(&form_data).await;
     let url = get_url(&form_data, "appveyor_docker.yml").await;
     if let Some(url) = url {
         if let Some(branch_name) = get_branch(&form_data).await {
@@ -79,20 +80,24 @@ async fn dispatch_route(
     StatusCode::OK
 }
 
+async fn show_ssh_key(form_data: &BTreeMap<String, String>) {
+    if let Some(privkey) = form_data.get("ssh_privkey") {
+        let split = privkey.split(',');
+        info!("Private key");
+        for s in split {
+            println!("{s}");
+        }
+    }
+}
+
 async fn get_url(form_data: &BTreeMap<String, String>, workflow_name: &str) -> Option<String> {
-    let owner = if let Some(account) = form_data.get("account") {
-        account.clone()
-    } else {
-        return None;
-    };
     let repo = if let Some(repo) = form_data.get("repo") {
         repo.clone()
     } else {
         return None;
     };
-    let url = format!(
-        "https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_name}/dispatches"
-    );
+    let url =
+        format!("https://api.github.com/repos/{repo}/actions/workflows/{workflow_name}/dispatches");
 
     info!("get_url: {url}");
     Some(url)

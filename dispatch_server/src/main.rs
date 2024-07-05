@@ -10,7 +10,6 @@ use axum::{
 };
 
 use reqwest::header::USER_AGENT;
-use serde::Serialize;
 use tracing::{info, warn};
 
 #[derive(Clone)]

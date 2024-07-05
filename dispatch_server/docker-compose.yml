@@ -1,7 +1,9 @@
 version: '3.3'
 services:
     dispatch_server:
-        image: .
+        build: .
+        environment:
+          TOKEN: your-token-here
         labels:
             - "traefik.enable=true"
             # https

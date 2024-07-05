@@ -8,6 +8,7 @@ RUN cargo chef prepare --recipe-path /src/recipe.json
 
 FROM chef AS builder
 COPY --from=planner /src/recipe.json /src/recipe.json
+RUN apk add musl-dev openssl-dev openssl-libs-static
 # Build dependencies
 RUN cargo chef cook --release --recipe-path /src/recipe.json
 # Build application

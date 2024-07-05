@@ -21,7 +21,17 @@ struct AppState {
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let token = std::env::args().nth(1).unwrap();
+    // Priorize arguments over environment variables. Otherwise panic.
+    let token = match std::env::args().nth(1) {
+        Some(token) => token,
+        None => {
+            // Use the environment token
+            match std::env::var("TOKEN") {
+                Ok(token) => token,
+                Err(e) => panic!("{e}"),
+            }
+        }
+    };
 
     let app_state = AppState { token };
 

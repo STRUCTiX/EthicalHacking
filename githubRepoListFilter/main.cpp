@@ -114,7 +114,7 @@ int filter(QTextStream &inputStream, QTextStream &outputStream) {
         // specify filter condition and output format here
         if (ownerLogin == fullName.split("/")[0] && !fork) {
             //outputStream << parts[0] << "," << fullName << "," << parts[3] << "," << ownerId << "," << (ownerType == "Organization") << "\n";
-            outputStream << parts[0] << "\n";
+            outputStream << fullName << "\n";
         }
     }
 

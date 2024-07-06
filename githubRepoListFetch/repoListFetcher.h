@@ -2,6 +2,7 @@
 #define REPO_FETCHER_H
 
 #include <QtCore>
+#include <QStringList>
 #include <QList>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>

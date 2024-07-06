@@ -8,7 +8,7 @@ int main(int argc, char *argv[]) {
     QCoreApplication app(argc, argv);
 
     app.setOrganizationName("deisele");
-    app.setApplicationName("GithubRepoListFetcher");
+    app.setApplicationName("githubRepoListFetch");
     app.setApplicationVersion("1.0.0");
 
     QCommandLineParser parser;
@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
     });
 
     QStringList args = app.arguments();
-    QString envExtraArgsStr = qEnvironmentVariable("GITHUB_REPO_FETCHER_ARGS");
+    QString envExtraArgsStr = qEnvironmentVariable("GITHUB_REPO_FETCH_ARGS");
     if (!envExtraArgsStr.isNull()) {
         QTextStream(stdout) << "Extra arguments from env: " << envExtraArgsStr << '\n';
     }

@@ -1,0 +1,7 @@
+build-*/
+*.user
+
+*.db
+filteredRepos.txt
+anomalies.txt
+trees/

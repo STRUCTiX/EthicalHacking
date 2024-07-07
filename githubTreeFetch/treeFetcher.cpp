@@ -153,14 +153,15 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
             }
             QJsonObject block = json["block"].toObject();
 
-            if (block["reason"].toString() != "unavailable") {
-                QTextStream(stderr) << "Unknown block reason: " << block["reason"].toString() << "\n";
+            QString blockReason = block["reason"].toString();
+            if (blockReason != "unavailable" && blockReason != "tos" && blockReason != "sensitive_data") {
+                QTextStream(stderr) << "Unknown block reason " << block["reason"].toString() << "for repository " << currentRepoFullName << "\n";
                 emit finished();
                 return;
             }
 
-            QTextStream(stdout) << "Repository access blocked for " << currentRepoFullName << "\n";
-            QTextStream(&anomalyLogFile) << "Repository access blocked for " << currentRepoFullName << "\n";
+            QTextStream(stdout) << "Repository access blocked for " << currentRepoFullName << " (reason: " << blockReason << ")\n";
+            QTextStream(&anomalyLogFile) << "Repository access blocked for " << currentRepoFullName << " (reason: " << blockReason << ")\n";
             QTimer::singleShot(0, this, &TreeFetcher::fetchNextTree);
             return;
         } else {

@@ -79,6 +79,7 @@ void TreeFetcher::fetchTree() {
         request.setRawHeader("Authorization", ("Bearer " + apiToken).toUtf8());
     }
     request.setRawHeader("X-GitHub-Api-Version", "2022-11-28");
+    request.setDecompressedSafetyCheckThreshold(-1);
 
     request.setUrl("https://api.github.com/repos/" + currentRepoFullName + "/git/trees/HEAD?recursive=1");
 

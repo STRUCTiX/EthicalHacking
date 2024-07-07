@@ -93,7 +93,7 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
         QTextStream(stdout) << "b\n";
     }
 
-    if (reply->error() != QNetworkReply::NoError && reply->error() != QNetworkReply::ContentAccessDenied && reply->error() != QNetworkReply::ContentNotFoundError && reply->error() != QNetworkReply::ContentConflictError) {
+    if (reply->error() != QNetworkReply::NoError && reply->error() != QNetworkReply::ContentAccessDenied && reply->error() != QNetworkReply::UnknownContentError && reply->error() != QNetworkReply::ContentNotFoundError && reply->error() != QNetworkReply::ContentConflictError) {
         QTextStream(stderr) << "Request failed:\n" << reply->error() << "\n" << reply->errorString() << "\n";
 
         errorStreak++;
@@ -114,7 +114,7 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
         return;
     }
 
-    if (reply->error() == QNetworkReply::ContentAccessDenied) {
+    if (reply->error() == QNetworkReply::ContentAccessDenied || reply->error() == QNetworkReply::UnknownContentError) {
         QByteArray data = reply->readAll();
 
         QJsonDocument json = QJsonDocument::fromJson(data);
@@ -154,7 +154,7 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
             QJsonObject block = json["block"].toObject();
 
             QString blockReason = block["reason"].toString();
-            if (blockReason != "unavailable" && blockReason != "tos" && blockReason != "sensitive_data") {
+            if (blockReason != "unavailable" && blockReason != "tos" && blockReason != "sensitive_data" && blockReason != "dmca") {
                 QTextStream(stderr) << "Unknown block reason " << block["reason"].toString() << "for repository " << currentRepoFullName << "\n";
                 emit finished();
                 return;

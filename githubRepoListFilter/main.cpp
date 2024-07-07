@@ -112,7 +112,7 @@ int filter(QTextStream &inputStream, QTextStream &outputStream) {
         bool ownerSiteAdmin = (parts[10] == "1");
 
         // specify filter condition and output format here
-        if (ownerLogin == fullName.split("/")[0] && !fork) {
+        if (ownerLogin == fullName.split("/")[0] && !fork && !description.isEmpty()) {
             //outputStream << parts[0] << "," << fullName << "," << parts[3] << "," << ownerId << "," << (ownerType == "Organization") << "\n";
             outputStream << fullName << "\n";
         }

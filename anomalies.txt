@@ -8,5 +8,11 @@ blocked unavailable (problem on disk):
 https://github.com/mattistrading/stock-tracker
 https://github.com/Rainer/advgame
 
+blocked dmca:
+https://github.com/ameyjir/widevine-l3-decryptor
+
 blocked sensitive_data:
 https://github.com/ccfishk/vs-app
+
+blocked private_information:
+https://github.com/rtlaceste/GUI_Development

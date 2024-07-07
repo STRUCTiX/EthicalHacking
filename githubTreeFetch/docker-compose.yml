@@ -1,0 +1,9 @@
+version: "3.9"
+
+services:
+  treefetch:
+    build: .
+    environment:
+      - GITHUB_TREE_FETCH_ARGS=-p -t <token> -o ./data/trees -a ./data/anomalies.txt -i ./data/repos.txt
+    volumes:
+      - ./.volumes/treefetch:/src/data

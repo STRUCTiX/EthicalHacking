@@ -1,0 +1,12 @@
+null repos:
+
+repos missing in list (undersized response):
+
+account name mismatch:
+
+blocked unavailable (problem on disk):
+https://github.com/mattistrading/stock-tracker
+https://github.com/Rainer/advgame
+
+blocked sensitive_data:
+https://github.com/ccfishk/vs-app

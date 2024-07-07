@@ -93,8 +93,22 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
         QTextStream(stdout) << "b\n";
     }
 
-    if (reply->error() != QNetworkReply::NoError && reply->error() != QNetworkReply::ContentAccessDenied && reply->error() != QNetworkReply::UnknownContentError && reply->error() != QNetworkReply::ContentNotFoundError && reply->error() != QNetworkReply::ContentConflictError) {
-        QTextStream(stderr) << "Request failed:\n" << reply->error() << "\n" << reply->errorString() << "\n";
+    bool httpStatusAvailable = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).isValid();
+    int httpStatusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    QString httpReasonPhrase = reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString();
+
+    if (!((reply->error() == QNetworkReply::NoError && httpStatusCode == 200) ||
+          (reply->error() == QNetworkReply::ContentAccessDenied && httpStatusCode == 403) ||
+          (reply->error() == QNetworkReply::UnknownContentError && httpStatusCode == 451) ||
+          (reply->error() == QNetworkReply::ContentNotFoundError && httpStatusCode == 404) ||
+          (reply->error() == QNetworkReply::ContentConflictError && httpStatusCode == 409))) {
+        QTextStream(stderr) << "Request failed:\n"
+                            << "Qt error: " << reply->error() << " " << reply->errorString() << "\n";
+        if (httpStatusAvailable) {
+            QTextStream(stderr) << "HTTP status code: " << httpStatusCode << " " << httpReasonPhrase << "\n";
+        } else {
+            QTextStream(stderr) << "HTTP status code not available\n";
+        }
 
         errorStreak++;
         if (errorStreak > errorStreakLimit) {
@@ -104,6 +118,12 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
         }
 
         QTimer::singleShot(5000, this, &TreeFetcher::fetchTree);
+        return;
+    }
+
+    if (!httpStatusAvailable) {
+        QTextStream(stderr) << "HTTP status code not available\n";
+        emit finished();
         return;
     }
 
@@ -119,20 +139,21 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
 
         QJsonDocument json = QJsonDocument::fromJson(data);
         if (json.isNull()) {
-            QTextStream(stderr) << "Could not parse 403 response\n";
+            QTextStream(stderr) << "Could not parse " << httpStatusCode << " response:\n"
+                                << data << "\n";
             emit finished();
             return;
         }
 
         if (!json.isObject()) {
-            QTextStream(stderr) << "Data from 403 response is not a json object\n";
+            QTextStream(stderr) << "Data from " << httpStatusCode << " response is not a json object\n";
             emit finished();
             return;
         }
 
         QString message = json["message"].toString();
         if (message.isNull()) {
-            QTextStream(stderr) << "No message string in 403 response\n";
+            QTextStream(stderr) << "No message string in " << httpStatusCode << " response\n";
             emit finished();
             return;
         }
@@ -147,7 +168,7 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
             return;
         } else if (message == "Repository access blocked") {
             if (!json["block"].isObject()) {
-                QTextStream(stderr) << "No block object in 403 response\n";
+                QTextStream(stderr) << "No block object in " << httpStatusCode << " response\n";
                 emit finished();
                 return;
             }
@@ -165,7 +186,7 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
             QTimer::singleShot(0, this, &TreeFetcher::fetchNextTree);
             return;
         } else {
-            QTextStream(stderr) << "Unknown 403 response message: " << message << "\n";
+            QTextStream(stderr) << "Unknown " << httpStatusCode << " response message: " << message << "\n";
             emit finished();
             return;
         }
@@ -183,7 +204,8 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
 
         QJsonDocument json = QJsonDocument::fromJson(data);
         if (json.isNull()) {
-            QTextStream(stderr) << "Could not parse 409 response\n";
+            QTextStream(stderr) << "Could not parse 409 response:\n"
+                                << data << "\n";
             emit finished();
             return;
         }

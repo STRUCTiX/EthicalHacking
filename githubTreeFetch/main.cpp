@@ -18,7 +18,7 @@ int main(int argc, char *argv[]) {
         {{"i", "input-repo-list"}, "Input file containing a newline-separated list of repository full names, for which the tree should be downloaded.", "file", "repos.txt"},
         {{"p", "progress"}, "Print one dot per request."},
         {{"o", "output"}, "Output directory.", "directory", "trees"},
-        {{"a", "anomaly-log"}, "Output text file to log all encountered anomalies.", "file", "anomalies.txt"},
+        {{"l", "unavailable-list"}, "Text file used to record all unavailable repositories.", "file", "unavailable_repos.csv"},
         {{"t", "token"}, "Github API access token(s). To specify multiple tokens, use multiple -t options.", "token string"},
         {{"u", "unauthenticated-mode"}, "How/if to use unauthenticated requests.", "off|first|normal|last", "first"},
         {{"d", "dispatch-method"}, "Method for selecting the next API token.", "balance|first-available|random", "balance"},
@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    TreeFetcher *task = new TreeFetcher(parser.value("input-repo-list"), parser.value("output"), parser.value("anomaly-log"), parser.values("token"), unauthenticatedMode, dispatchMethod, parser.isSet("progress"), errorStreakLimit, &app);
+    TreeFetcher *task = new TreeFetcher(parser.value("input-repo-list"), parser.value("output"), parser.value("unavailable-list"), parser.values("token"), unauthenticatedMode, dispatchMethod, parser.isSet("progress"), errorStreakLimit, &app);
 
     QObject::connect(task, &TreeFetcher::finished, &app, &QCoreApplication::quit);
 

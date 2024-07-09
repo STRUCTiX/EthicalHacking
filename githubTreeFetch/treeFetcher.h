@@ -9,13 +9,14 @@
 #include <QList>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#include <QSet>
 #include "apiTokenDispatcher.h"
 
 class TreeFetcher: public QObject {
     Q_OBJECT
 
     public:
-        TreeFetcher(QString repoListFile, QString outputDirectory, QString anomalyLogFile, QStringList apiTokens, UnauthenticatedMode unauthenticatedMode, DispatchMethod dispatchMethod, bool showProgress, int errorStreakLimit, QObject *parent = nullptr);
+        TreeFetcher(QString repoListFile, QString outputDirectory, QString unavailableReposFile, QStringList apiTokens, UnauthenticatedMode unauthenticatedMode, DispatchMethod dispatchMethod, bool showProgress, int errorStreakLimit, QObject *parent = nullptr);
 
     public slots:
         void run();
@@ -24,8 +25,9 @@ class TreeFetcher: public QObject {
         void finished();
 
     private:
-        bool loadIDs();
+        bool loadPreviouslyUnavailableReposList();
         QString treeFilePath();
+        void logAnomaly(QString message);
 
     private slots:
         void fetchNextTree();
@@ -35,12 +37,14 @@ class TreeFetcher: public QObject {
     private:
         QNetworkAccessManager *networkAccessManager;
         ApiTokenDispatcher apiTokenDispatcher;
-        QFile repoListFile;
-        QTextStream repoListStream;
         QDir outputDirectory;
-        QFile anomalyLogFile;
+        QFile repoListFile;
+        QFile unavailableReposFile;
+        QTextStream repoListStream;
+        QTextStream unavailableReposStream;
 
         bool showProgress;
+        QSet<QString> previouslyUnavailableRepos;
 
         QString currentRepoFullName;
         QString lastApiToken;

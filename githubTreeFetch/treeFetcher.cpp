@@ -8,8 +8,8 @@
 #include <QDateTime>
 #include "treeFetcher.h"
 
-TreeFetcher::TreeFetcher(QString repoListFile, QString outputDirectory, QString anomalyLogFile, QStringList apiTokens, UnauthenticatedMode unauthenticatedMode, DispatchMethod dispatchMethod, bool showProgress, int errorStreakLimit, QObject *parent)
-    : QObject(parent), networkAccessManager(new QNetworkAccessManager(this)), apiTokenDispatcher(apiTokens, unauthenticatedMode, dispatchMethod), repoListFile(repoListFile), outputDirectory(outputDirectory), anomalyLogFile(anomalyLogFile), showProgress(showProgress), errorStreakLimit(errorStreakLimit), errorStreak(0) {
+TreeFetcher::TreeFetcher(QString repoListFile, QString outputDirectory, QString unavailableReposFile, QStringList apiTokens, UnauthenticatedMode unauthenticatedMode, DispatchMethod dispatchMethod, bool showProgress, int errorStreakLimit, QObject *parent)
+    : QObject(parent), networkAccessManager(new QNetworkAccessManager(this)), apiTokenDispatcher(apiTokens, unauthenticatedMode, dispatchMethod), outputDirectory(outputDirectory), repoListFile(repoListFile), unavailableReposFile(unavailableReposFile), showProgress(showProgress), errorStreakLimit(errorStreakLimit), errorStreak(0) {
     networkAccessManager->setTransferTimeout();
     connect(networkAccessManager, &QNetworkAccessManager::finished, this, &TreeFetcher::onRequestFinished);
 }
@@ -22,15 +22,42 @@ void TreeFetcher::run() {
         return;
     }
 
-    if (!anomalyLogFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
-        QTextStream(stderr) << "Could not open anomaly log file for writing\n";
+    if (!loadPreviouslyUnavailableReposList()) {
+        emit finished();
+        return;
+    }
+
+    if (!unavailableReposFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        QTextStream(stderr) << "Could not open unavailable repos file for writing\n";
         emit finished();
         return;
     }
 
     repoListStream.setDevice(&repoListFile);
+    unavailableReposStream.setDevice(&unavailableReposFile);
 
     fetchNextTree();
+}
+
+
+bool TreeFetcher::loadPreviouslyUnavailableReposList() {
+    QFile unavailableReposFileIn(unavailableReposFile.fileName());
+    if (!unavailableReposFileIn.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return true;
+    }
+
+    QTextStream in(&unavailableReposFileIn);
+    while (!in.atEnd()) {
+        QString line = in.readLine();
+        QStringList parts = line.split(",");
+        if (parts.size() != 2) {
+            QTextStream(stderr) << "Invalid line in unavailable repos file: " << line << "\n";
+            return false;
+        }
+        previouslyUnavailableRepos.insert(parts[0]);
+    }
+
+    return true;
 }
 
 
@@ -39,16 +66,24 @@ QString TreeFetcher::treeFilePath() {
 }
 
 
+void TreeFetcher::logAnomaly(QString message) {
+    QTextStream(stdout) << "Could not fetch " << currentRepoFullName << ", " << message << "\n";
+    unavailableReposStream << currentRepoFullName << "," << message << Qt::endl;
+}
+
+
 void TreeFetcher::fetchNextTree() {
     while (!repoListStream.atEnd()) {
         currentRepoFullName = repoListStream.readLine();
 
-        if (!QFileInfo::exists(treeFilePath())) {
+        if (QFileInfo::exists(treeFilePath())) {
+            QTextStream(stdout) << "Tree file already exists for " << currentRepoFullName << "\n";
+        } else if (previouslyUnavailableRepos.contains(currentRepoFullName)) {
+            QTextStream(stdout) << "Skipping previously unavailable repository " << currentRepoFullName << "\n";
+        } else {
             fetchTree();
             return;
         }
-
-        QTextStream(stdout) << "Tree file already exists for " << currentRepoFullName << "\n";
     }
 
     emit finished();
@@ -102,7 +137,8 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
           (reply->error() == QNetworkReply::ContentAccessDenied && httpStatusCode == 403) ||
           (reply->error() == QNetworkReply::UnknownContentError && httpStatusCode == 451) ||
           (reply->error() == QNetworkReply::ContentNotFoundError && httpStatusCode == 404) ||
-          (reply->error() == QNetworkReply::ContentConflictError && httpStatusCode == 409))) {
+          (reply->error() == QNetworkReply::ContentConflictError && httpStatusCode == 409) ||
+          (reply->error() == QNetworkReply::InternalServerError && httpStatusCode == 500))) {
         QTextStream(stderr) << "Request failed:\n"
                             << "Qt error: " << reply->error() << " " << reply->errorString() << "\n";
         if (httpStatusAvailable) {
@@ -182,8 +218,7 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
                 return;
             }
 
-            QTextStream(stdout) << "Repository access blocked for " << currentRepoFullName << " (reason: " << blockReason << ")\n";
-            QTextStream(&anomalyLogFile) << "Repository access blocked for " << currentRepoFullName << " (reason: " << blockReason << ")\n";
+            logAnomaly("access blocked (reason " + blockReason + ")");
             QTimer::singleShot(0, this, &TreeFetcher::fetchNextTree);
             return;
         } else {
@@ -194,8 +229,7 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
     }
 
     if (reply->error() == QNetworkReply::ContentNotFoundError) {
-        QTextStream(stdout) << "No tree found for " << currentRepoFullName << "\n";
-        QTextStream(&anomalyLogFile) << "No tree found for " << currentRepoFullName << "\n";
+        logAnomaly("tree not found");
         QTimer::singleShot(0, this, &TreeFetcher::fetchNextTree);
         return;
     }
@@ -225,8 +259,7 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
         }
 
         if (message == "Git Repository is empty.") {
-            QTextStream(stdout) << "Empty repository: " << currentRepoFullName << "\n";
-            QTextStream(&anomalyLogFile) << "Empty repository: " << currentRepoFullName << "\n";
+            logAnomaly("repository empty");
             QTimer::singleShot(0, this, &TreeFetcher::fetchNextTree);
             return;
         } else {
@@ -234,6 +267,12 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
             emit finished();
             return;
         }
+    }
+
+    if (reply->error() == QNetworkReply::InternalServerError) {
+        logAnomaly("internal server error");
+        QTimer::singleShot(0, this, &TreeFetcher::fetchNextTree);
+        return;
     }
 
     QFile treeFile(treeFilePath());
@@ -273,10 +312,9 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
         return;
     }
 
-    if (!url.mid(urlFront.length()).startsWith(currentRepoFullName)) {
+    /*if (!url.mid(urlFront.length()).startsWith(currentRepoFullName)) {
         QTextStream(stdout) << "Url from response does not match fetched repository: " << currentRepoFullName << "\n";
-        QTextStream(&anomalyLogFile) << "Url from response does not match fetched repository: " << currentRepoFullName << "\n";
-    }
+    }*/
 
     out << data;
 

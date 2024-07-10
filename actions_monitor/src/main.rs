@@ -1,3 +1,5 @@
+mod zip;
+
 use std::collections::BTreeMap;
 
 use reqwest::{header, Client};
@@ -116,6 +118,8 @@ async fn main() -> anyhow::Result<()> {
         download_workflow_logs(client, &owner, &repo, &ids[0].to_string())
             .await
             .unwrap();
+        let filename = format!("./out/{owner}_{repo}_{}.zip", &ids[0]);
+        zip::extract_zip(&filename, &format!("./out/{owner}_{repo}_{}", &ids[0]));
     }
 
     Ok(())

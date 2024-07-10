@@ -55,27 +55,28 @@ async fn download_workflow_logs(
     repo: &str,
     run_id: &str,
 ) -> anyhow::Result<()> {
-    let response_header = client
+    let logs_zip = client
         .get(format!(
             "https://api.github.com/repos/{owner}/{repo}/actions/runs/{run_id}/logs"
         ))
         .send()
+        .await?
+        .bytes()
         .await?;
-    if let Some(location) = response_header.headers().get("Location") {
-        if let Ok(loc) = location.to_str() {
-            // Get the actual logs
-            let logs = client.get(loc).send().await?.text().await?;
-            match fs::write(format!("./out/{owner}_{repo}_{run_id}.zip"), logs).await {
-                Ok(_) => info!("Log {owner}/{repo} run id: {run_id} downloaded."),
-                Err(e) => warn!("Log download: {e}"),
-            }
-        }
+
+    if let Err(e) = fs::create_dir("./out").await {
+        info!("{e}");
+    }
+
+    match fs::write(format!("./out/{owner}_{repo}_{run_id}.zip"), logs_zip).await {
+        Ok(_) => info!("Log {owner}/{repo} run id: {run_id} downloaded."),
+        Err(e) => warn!("Log download: {e}"),
     }
     Ok(())
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     // Use the environment variables for configuration
@@ -92,6 +93,30 @@ async fn main() {
         Err(e) => panic!("{e}"),
     };
 
+    info!("Token: {token}");
+    info!("Owner: {owner}");
+    info!("Repository: {repo}");
+
     let client = authclient!(token);
-    get_repo_workflows(client, &owner, &repo).await.unwrap();
+    let repo_workflows = get_repo_workflows(client, &owner, &repo).await?;
+    let runs = repo_workflows.get("workflow_runs").unwrap();
+
+    if let Some(wfruns) = runs.as_array() {
+        // Retrieve the run IDs
+        let mut ids = wfruns
+            .iter()
+            .filter_map(|x| x.get("id"))
+            .filter_map(|x| x.as_i64())
+            .collect::<Vec<i64>>();
+
+        // Sort descending so the most recent run will be first
+        ids.sort();
+        ids.reverse();
+
+        download_workflow_logs(client, &owner, &repo, &ids[0].to_string())
+            .await
+            .unwrap();
+    }
+
+    Ok(())
 }

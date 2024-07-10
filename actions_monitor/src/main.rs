@@ -107,6 +107,13 @@ async fn main() -> anyhow::Result<()> {
         // Retrieve the run IDs
         let mut ids = wfruns
             .iter()
+            .filter(|x| {
+                if let Some(name) = x.get("name") {
+                    name == "AppVeyor Docker Bridge"
+                } else {
+                    false
+                }
+            })
             .filter_map(|x| x.get("id"))
             .filter_map(|x| x.as_i64())
             .collect::<Vec<i64>>();

@@ -2,6 +2,7 @@ mod zip;
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
+use anyhow::Context;
 use reqwest::{header, Client};
 use serde_json::Value;
 use tokio::{fs, time::sleep};
@@ -140,6 +141,62 @@ pub async fn get_running_log(
     Ok(log)
 }
 
+/// This function requires a valid Github session cookie
+pub async fn get_ssh_login_info(
+    owner: &str,
+    repo: &str,
+    commit_sha: &str,
+    job_id: i64,
+    log_num: u32,
+) -> anyhow::Result<String> {
+    let client = reqauthclient!("session.json");
+
+    let url = format!(
+        "https://github.com/{owner}/{repo}/commit/{commit_sha}/checks/{job_id}/logs/{log_num}"
+    );
+
+    info!(url);
+
+    let log = client.get(&url).send().await?.text().await?;
+    info!(log);
+    let ssh_info = log.split_once('\n').context("Can't split log")?;
+    let ssh_info = ssh_info.0.to_owned();
+    let ssh_info = &ssh_info[42..];
+    let ssh_info = ssh_info
+        .strip_suffix(" sleep 1h")
+        .context("Could not strip suffix")?
+        .to_owned();
+    info!("{ssh_info}");
+
+    Ok(ssh_info)
+}
+
+pub async fn store_private_key(log_msg: &str, keyname: &str) -> anyhow::Result<()> {
+    let lines = log_msg.split('\n');
+
+    for l in lines.into_iter() {
+        if l.len() < 42 {
+            continue;
+        }
+        let rm_prefix = &l[42..];
+        if !rm_prefix.starts_with("-----") {
+            continue;
+        }
+        let split_once = rm_prefix.split_once('\'');
+        if let Some(sp) = split_once {
+            let privkey = sp.0.replace(',', "\n");
+            println!("{privkey}");
+            match fs::write(format!("./out/{keyname}"), privkey).await {
+                Ok(_) => info!("Private key {keyname} extracted."),
+                Err(e) => warn!("Private key: {e}"),
+            }
+            break;
+        }
+    }
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -234,6 +291,14 @@ async fn main() -> anyhow::Result<()> {
                     // Download the current log with the cookie session
                     let log = get_running_log(&owner, &repo, commit_sha, job_ids[0], 2).await?;
                     info!("{log}");
+
+                    // Extract private key
+                    let filename = format!("{owner}_{repo}_{commit_sha}_{}", job_ids[0]);
+                    store_private_key(&log, &filename).await?;
+                    let ssh_command =
+                        get_ssh_login_info(&owner, &repo, commit_sha, job_ids[0], 3).await?;
+                    let full_command = format!("{ssh_command} -i ./out/{filename}");
+                    info!("{full_command}");
                 }
             } else {
                 info!("No running job");

@@ -212,7 +212,7 @@ void TreeFetcher::onRequestFinished(QNetworkReply *reply) {
             QJsonObject block = json["block"].toObject();
 
             QString blockReason = block["reason"].toString();
-            if (blockReason != "unavailable" && blockReason != "tos" && blockReason != "sensitive_data" && blockReason != "dmca" && blockReason != "private_information" && blockReason != "size") {
+            if (blockReason != "unavailable" && blockReason != "tos" && blockReason != "sensitive_data" && blockReason != "dmca" && blockReason != "private_information" && blockReason != "size" && blockReason != "trademark") {
                 QTextStream(stderr) << "Unknown block reason " << block["reason"].toString() << " for repository " << currentRepoFullName << "\n";
                 emit finished();
                 return;

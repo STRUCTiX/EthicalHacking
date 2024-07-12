@@ -16,3 +16,6 @@ https://github.com/ccfishk/vs-app
 
 blocked private_information:
 https://github.com/rtlaceste/GUI_Development
+
+blocked trademark:
+https://github.com/Vishal-raj-1/Flipkart-Clone

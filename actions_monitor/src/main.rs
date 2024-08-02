@@ -1,8 +1,10 @@
+mod portscan;
 mod zip;
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
+use portscan::syn_scan;
 use reqwest::{header, Client};
 use serde_json::Value;
 use tokio::{fs, time::sleep};
@@ -197,6 +199,20 @@ pub async fn store_private_key(log_msg: &str, keyname: &str) -> anyhow::Result<(
     Ok(())
 }
 
+pub async fn extract_host_ip(log_msg: &str) -> anyhow::Result<String> {
+    let lines = log_msg.split('\n');
+
+    for l in lines.into_iter() {
+        if l.starts_with("Host ") {
+            //
+            let ip = l.split(" ").nth(1).context("Can't parse ssh IP")?;
+            return Ok(ip.to_string());
+        }
+    }
+
+    Err(anyhow!("Can't parse ssh IP"))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -295,10 +311,20 @@ async fn main() -> anyhow::Result<()> {
                     // Extract private key
                     let filename = format!("{owner}_{repo}_{commit_sha}_{}", job_ids[0]);
                     store_private_key(&log, &filename).await?;
-                    let ssh_command =
-                        get_ssh_login_info(&owner, &repo, commit_sha, job_ids[0], 3).await?;
-                    let full_command = format!("{ssh_command} -i ./out/{filename}");
-                    info!("{full_command}");
+
+                    let host_ip = extract_host_ip(&log).await?;
+                    let user = "appveyor";
+
+                    let ssh_port = syn_scan(&host_ip, 33801..33800 + 254)?;
+                    ssh_port.iter().for_each(|p| println!("SSH Port: {p}"));
+                    println!(
+                        "ssh -i {filename} -p {} {user}@{host_ip}",
+                        ssh_port.first().context("Could not parse SSH Port")?
+                    );
+                    //let ssh_command =
+                    //    get_ssh_login_info(&owner, &repo, commit_sha, job_ids[0], 3).await?;
+                    //let full_command = format!("{ssh_command} -i ./out/{filename}");
+                    //info!("{full_command}");
                 }
             } else {
                 info!("No running job");

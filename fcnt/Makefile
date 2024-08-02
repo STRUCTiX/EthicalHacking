@@ -1,7 +1,7 @@
 all: fcnt
 
 fcnt: fcnt.c
-	cc -Wall -O2 -o $@ $<
+	cc -Wall -O2 -static -o $@ $<
 
 clean:
 	rm -f fcnt

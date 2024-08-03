@@ -203,11 +203,15 @@ pub async fn extract_host_ip(log_msg: &str) -> anyhow::Result<String> {
     let lines = log_msg.split('\n');
 
     for l in lines.into_iter() {
-        if l.starts_with("Host ") {
-            //
-            let ip = l.split(" ").nth(1).context("Can't parse ssh IP")?;
-            return Ok(ip.to_string());
+        if l.len() < 42 {
+            continue;
         }
+        let rm_prefix = &l[29..];
+        if !rm_prefix.starts_with("Host ") {
+            continue;
+        }
+        let ip = rm_prefix.split(' ').nth(1).context("Can't parse ssh IP")?;
+        return Ok(ip.to_string());
     }
 
     Err(anyhow!("Can't parse ssh IP"))
@@ -306,7 +310,7 @@ async fn main() -> anyhow::Result<()> {
 
                     // Download the current log with the cookie session
                     let log = get_running_log(&owner, &repo, commit_sha, job_ids[0], 2).await?;
-                    info!("{log}");
+                    println!("{log}");
 
                     // Extract private key
                     let filename = format!("{owner}_{repo}_{commit_sha}_{}", job_ids[0]);

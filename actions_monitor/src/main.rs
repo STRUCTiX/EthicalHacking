@@ -1,148 +1,15 @@
+mod macros;
+mod parsing;
 mod portscan;
+mod workflows;
 mod zip;
-
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context};
 use portscan::syn_scan;
-use reqwest::{header, Client};
-use serde_json::Value;
+use std::time::Duration;
 use tokio::{fs, time::sleep};
 use tracing::{info, level_filters::LevelFilter, warn};
-use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
-
-macro_rules! authclient {
-    ($s:expr) => {{
-        static RE: once_cell::sync::OnceCell<reqwest::Client> = once_cell::sync::OnceCell::new();
-        RE.get_or_init(|| {
-            // Add necessary Github API headers
-            let mut headers = header::HeaderMap::new();
-            headers.insert(
-                "Accept",
-                header::HeaderValue::from_static("application/vnd.github+json"),
-            );
-            headers.insert(
-                "X-GitHub-Api-Version",
-                header::HeaderValue::from_static("2022-11-28"),
-            );
-            let bearer = format!("Bearer {}", $s);
-            let mut secret = header::HeaderValue::from_str(&bearer).unwrap();
-            secret.set_sensitive(true);
-            headers.insert("Authorization", secret);
-
-            // Build client with a user_agent name and HeaderMap
-            reqwest::Client::builder()
-                .user_agent("actions_monitor")
-                .default_headers(headers)
-                .build()
-                .unwrap()
-        })
-    }};
-}
-
-macro_rules! reqauthclient {
-    ($s:literal) => {{
-        static RE: once_cell::sync::OnceCell<reqwest::Client> = once_cell::sync::OnceCell::new();
-        RE.get_or_init(|| {
-            // Build a client with the Github session
-            let cookie_store = {
-                let file = std::fs::File::open($s)
-                    .map(std::io::BufReader::new)
-                    .unwrap();
-
-                // use re-exported version of `CookieStore` for crate compatibility
-                reqwest_cookie_store::CookieStore::load_json(file).unwrap()
-            };
-            let cookie_store = reqwest_cookie_store::CookieStoreMutex::new(cookie_store);
-            let cookie_store = Arc::new(cookie_store);
-
-            // Create a reqwest client with the Github user session cookie
-            let client = reqwest::Client::builder()
-                .cookie_provider(Arc::clone(&cookie_store))
-                .build()
-                .unwrap();
-            return client;
-        })
-    }};
-}
-
-async fn get_repo_workflows(
-    client: &Client,
-    owner: &str,
-    repo: &str,
-) -> anyhow::Result<BTreeMap<String, Value>> {
-    Ok(client
-        .get(format!(
-            "https://api.github.com/repos/{owner}/{repo}/actions/runs"
-        ))
-        .send()
-        .await?
-        .json::<BTreeMap<String, Value>>()
-        .await?)
-}
-
-async fn get_workflow_jobs(
-    client: &Client,
-    owner: &str,
-    repo: &str,
-    run_id: i64,
-) -> anyhow::Result<BTreeMap<String, Value>> {
-    Ok(client
-        .get(format!(
-            "https://api.github.com/repos/{owner}/{repo}/actions/runs/{run_id}/jobs"
-        ))
-        .send()
-        .await?
-        .json::<BTreeMap<String, Value>>()
-        .await?)
-}
-
-async fn download_workflow_logs(
-    client: &Client,
-    owner: &str,
-    repo: &str,
-    run_id: &str,
-) -> anyhow::Result<()> {
-    let logs_zip = client
-        .get(format!(
-            "https://api.github.com/repos/{owner}/{repo}/actions/runs/{run_id}/logs"
-        ))
-        .send()
-        .await?
-        .bytes()
-        .await?;
-
-    if let Err(e) = fs::create_dir("./out").await {
-        info!("{e}");
-    }
-
-    match fs::write(format!("./out/{owner}_{repo}_{run_id}.zip"), logs_zip).await {
-        Ok(_) => info!("Log {owner}/{repo} run id: {run_id} downloaded."),
-        Err(e) => warn!("Log download: {e}"),
-    }
-    Ok(())
-}
-
-/// This function requires a valid Github session cookie
-pub async fn get_running_log(
-    owner: &str,
-    repo: &str,
-    commit_sha: &str,
-    job_id: i64,
-    log_num: u32,
-) -> anyhow::Result<String> {
-    let client = reqauthclient!("session.json");
-
-    let url = format!(
-        "https://github.com/{owner}/{repo}/commit/{commit_sha}/checks/{job_id}/logs/{log_num}"
-    );
-
-    info!(url);
-
-    let log = client.get(&url).send().await?.text().await?;
-
-    Ok(log)
-}
+use tracing_subscriber::EnvFilter;
 
 /// This function requires a valid Github session cookie
 pub async fn get_ssh_login_info(
@@ -172,50 +39,6 @@ pub async fn get_ssh_login_info(
     info!("{ssh_info}");
 
     Ok(ssh_info)
-}
-
-pub async fn store_private_key(log_msg: &str, keyname: &str) -> anyhow::Result<()> {
-    let lines = log_msg.split('\n');
-
-    for l in lines.into_iter() {
-        if l.len() < 42 {
-            continue;
-        }
-        let rm_prefix = &l[42..];
-        if !rm_prefix.starts_with("-----") {
-            continue;
-        }
-        let split_once = rm_prefix.split_once('\'');
-        if let Some(sp) = split_once {
-            let privkey = sp.0.replace(',', "\n");
-            println!("{privkey}");
-            match fs::write(format!("./out/{keyname}"), privkey).await {
-                Ok(_) => info!("Private key {keyname} extracted."),
-                Err(e) => warn!("Private key: {e}"),
-            }
-            break;
-        }
-    }
-
-    Ok(())
-}
-
-pub async fn extract_host_ip(log_msg: &str) -> anyhow::Result<String> {
-    let lines = log_msg.split('\n');
-
-    for l in lines.into_iter() {
-        if l.len() < 42 {
-            continue;
-        }
-        let rm_prefix = &l[29..];
-        if !rm_prefix.starts_with("Host ") {
-            continue;
-        }
-        let ip = rm_prefix.split(' ').nth(1).context("Can't parse ssh IP")?;
-        return Ok(ip.to_string());
-    }
-
-    Err(anyhow!("Can't parse ssh IP"))
 }
 
 #[tokio::main]
@@ -251,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
 
     let client = authclient!(token);
     loop {
-        let repo_workflows = get_repo_workflows(client, &owner, &repo).await?;
+        let repo_workflows = workflows::get_repo_workflows(client, &owner, &repo).await?;
         let runs = repo_workflows.get("workflow_runs").unwrap();
 
         if let Some(wfruns) = runs.as_array() {
@@ -286,21 +109,6 @@ async fn main() -> anyhow::Result<()> {
                 })
                 .collect::<Vec<(i64, String)>>();
 
-            //if !ids.is_empty() {
-            //    // Sort descending so the most recent run will be first
-            //    ids.sort();
-            //    ids.reverse();
-            //    info!("Download workflow {}", &ids[0].to_string());
-
-            //    download_workflow_logs(client, &owner, &repo, &ids[0].to_string())
-            //        .await
-            //        .unwrap();
-            //    let filename = format!("./out/{owner}_{repo}_{}.zip", &ids[0]);
-            //    zip::extract_zip(&filename, &format!("./out/{owner}_{repo}_{}", &ids[0]));
-            //} else {
-            //    info!("All workflows are completed");
-            //}
-
             if !ids.is_empty() {
                 ids.sort_by_key(|x| x.0);
                 ids.reverse();
@@ -309,7 +117,7 @@ async fn main() -> anyhow::Result<()> {
                 info!("Download log id: {id}, commit: {commit_sha}");
 
                 // Retrieve job id from jobs endpoint
-                let job_ids = get_workflow_jobs(client, &owner, &repo, id).await?;
+                let job_ids = workflows::get_workflow_jobs(client, &owner, &repo, id).await?;
                 let job_ids = job_ids.get("jobs").unwrap();
                 if let Some(job_ids) = job_ids.as_array() {
                     let job_ids = job_ids
@@ -321,7 +129,9 @@ async fn main() -> anyhow::Result<()> {
                     // Download the current log with the cookie session
                     let log;
                     loop {
-                        match get_running_log(&owner, &repo, commit_sha, job_ids[0], 2).await {
+                        match workflows::get_running_log(&owner, &repo, commit_sha, job_ids[0], 2)
+                            .await
+                        {
                             Ok(l) => {
                                 log = l;
                                 break;

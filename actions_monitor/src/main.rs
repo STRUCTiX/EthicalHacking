@@ -4,42 +4,12 @@ mod portscan;
 mod workflows;
 mod zip;
 
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use portscan::syn_scan;
 use std::time::Duration;
-use tokio::{fs, time::sleep};
+use tokio::time::sleep;
 use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
-
-/// This function requires a valid Github session cookie
-pub async fn get_ssh_login_info(
-    owner: &str,
-    repo: &str,
-    commit_sha: &str,
-    job_id: i64,
-    log_num: u32,
-) -> anyhow::Result<String> {
-    let client = reqauthclient!("session.json");
-
-    let url = format!(
-        "https://github.com/{owner}/{repo}/commit/{commit_sha}/checks/{job_id}/logs/{log_num}"
-    );
-
-    info!(url);
-
-    let log = client.get(&url).send().await?.text().await?;
-    info!(log);
-    let ssh_info = log.split_once('\n').context("Can't split log")?;
-    let ssh_info = ssh_info.0.to_owned();
-    let ssh_info = &ssh_info[42..];
-    let ssh_info = ssh_info
-        .strip_suffix(" sleep 1h")
-        .context("Could not strip suffix")?
-        .to_owned();
-    info!("{ssh_info}");
-
-    Ok(ssh_info)
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -144,9 +114,9 @@ async fn main() -> anyhow::Result<()> {
 
                     // Extract private key
                     let filename = format!("{owner}_{repo}_{commit_sha}_{}", job_ids[0]);
-                    store_private_key(&log, &filename).await?;
+                    parsing::store_private_key(&log, &filename).await?;
 
-                    let Ok(host_ip) = extract_host_ip(&log).await else {
+                    let Ok(host_ip) = parsing::extract_host_ip(&log).await else {
                         // Log was not fully completed. Just try the download again.
                         continue;
                     };

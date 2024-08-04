@@ -8,7 +8,8 @@ use portscan::syn_scan;
 use reqwest::{header, Client};
 use serde_json::Value;
 use tokio::{fs, time::sleep};
-use tracing::{info, warn};
+use tracing::{info, level_filters::LevelFilter, warn};
+use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
 
 macro_rules! authclient {
     ($s:expr) => {{
@@ -219,7 +220,16 @@ pub async fn extract_host_ip(log_msg: &str) -> anyhow::Result<String> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env()?
+        .add_directive("pistol::utils=error".parse()?);
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .compact()
+        .with_line_number(true)
+        .with_file(true)
+        .init();
 
     // Use the environment variables for configuration
     let token = match std::env::var("TOKEN") {
@@ -309,26 +319,35 @@ async fn main() -> anyhow::Result<()> {
                         .collect::<Vec<i64>>();
 
                     // Download the current log with the cookie session
-                    let log = get_running_log(&owner, &repo, commit_sha, job_ids[0], 2).await?;
+                    let log;
+                    loop {
+                        match get_running_log(&owner, &repo, commit_sha, job_ids[0], 2).await {
+                            Ok(l) => {
+                                log = l;
+                                break;
+                            }
+                            Err(e) => warn!("Can't get run log, retry. Error: {e}"),
+                        }
+                    }
+                    //let log = get_running_log(&owner, &repo, commit_sha, job_ids[0], 2).await?;
                     println!("{log}");
 
                     // Extract private key
                     let filename = format!("{owner}_{repo}_{commit_sha}_{}", job_ids[0]);
                     store_private_key(&log, &filename).await?;
 
-                    let host_ip = extract_host_ip(&log).await?;
+                    let Ok(host_ip) = extract_host_ip(&log).await else {
+                        // Log was not fully completed. Just try the download again.
+                        continue;
+                    };
                     let user = "appveyor";
 
                     let ssh_port = syn_scan(&host_ip, 33801..33800 + 254)?;
                     ssh_port.iter().for_each(|p| println!("SSH Port: {p}"));
                     println!(
-                        "ssh -i {filename} -p {} {user}@{host_ip}",
+                        "ssh -i ./out/{filename} -p {} {user}@{host_ip}",
                         ssh_port.first().context("Could not parse SSH Port")?
                     );
-                    //let ssh_command =
-                    //    get_ssh_login_info(&owner, &repo, commit_sha, job_ids[0], 3).await?;
-                    //let full_command = format!("{ssh_command} -i ./out/{filename}");
-                    //info!("{full_command}");
                 }
             } else {
                 info!("No running job");

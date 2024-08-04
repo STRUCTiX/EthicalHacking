@@ -9,7 +9,7 @@ pub fn syn_scan(dst_ipv4: &str, port_range: Range<u16>) -> anyhow::Result<Vec<u1
     let src_port = None;
     // The destination address is required.
     let dst_ipv4 = Ipv4Addr::from_str(dst_ipv4)?;
-    let threads_num = 4;
+    let threads_num = 250;
     let timeout = Some(Duration::new(1, 0));
     let host = Host::new(dst_ipv4.into(), Some(port_range.collect()));
     // Users should build the `target` themselves.

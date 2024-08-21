@@ -1,5 +1,5 @@
 curl \
-  -F "account=../../api/buildjobs/v4lkob3o6d91i7jj/artifacts/temperature_converter_example%2Fpayload.json?stream=true#" \
+  -F "account=../../api/buildjobs/5q6s1wsid01at49x/artifacts/payload.json?stream=true#" \
   -F "project=a" \
   -F "buildid=0" \
   -F "base=a" \

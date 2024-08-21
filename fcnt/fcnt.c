@@ -10,7 +10,7 @@
 #include <dirent.h>
 #include <errno.h>
 
-#define BUFSIZE 10 * 1024 * 1024
+#define BUFSIZE 1 * 1024 * 1024
 
 #ifdef __linux__
 #define getdents getdents64

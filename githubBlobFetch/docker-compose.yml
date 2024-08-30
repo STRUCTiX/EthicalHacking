@@ -1,0 +1,9 @@
+version: "3.9"
+
+services:
+  blobfetch:
+    build: .
+    environment:
+      - GITHUB_BLOB_FETCH_ARGS=-p -t <token> -o ./data/blobs -a ./data/anomalies.txt -i ./data/trees.txt
+    volumes:
+      - ./.volumes/blobfetch:/src/data

@@ -17,6 +17,7 @@ pub async fn store_private_key(log_msg: &str, keyname: &str) -> anyhow::Result<(
         let split_once = rm_prefix.split_once('\'');
         if let Some(sp) = split_once {
             let privkey = sp.0.replace(',', "\n");
+            let privkey = privkey + "\n";
             println!("{privkey}");
             match fs::write(format!("./out/{keyname}"), privkey).await {
                 Ok(_) => info!("Private key {keyname} extracted."),

